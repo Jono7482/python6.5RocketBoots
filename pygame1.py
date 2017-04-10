@@ -11,6 +11,9 @@ clock = pygame.time.Clock()
 fps = 120
 resolution = 800, 600
 debug = True
+dude = None
+display = None
+this_level = None
 
 screen = pygame.display.set_mode(resolution)
 
@@ -24,11 +27,6 @@ clouds_array = [load("cloud1.png").convert_alpha(),
                 load("cloud3.png").convert_alpha(),
                 load("cloud4.png").convert_alpha()]
 imgobstacle1 = load("obstacle2.png").convert()
-littledude1 = load("littledude1.png").convert_alpha()
-flamearray1 = [load("flame1.png").convert_alpha(),
-               load("flame2.png").convert_alpha()]
-flamearray2 = [load("flame3.png").convert_alpha(),
-               load("flame4.png").convert_alpha()]
 
 music = pygame.mixer.music
 music.load("Indiekid.mp3")
@@ -38,25 +36,15 @@ boots1 = pygame.mixer.find_channel()
 
 
 def main():
+    global dude, display, this_level
+    display = Display()
+    dude = DudeObj()
+    this_level = LevelObj()
     music.play(-1, 0.0)
     gravity = .25
     speed = 0
-    boost = bool
-    thislevel = LevelObj()
 
-    duderect = pygame.Rect(75, 300, 30, 30)
-    screen.blit(background, (0, 0))
-    cloud1 = Clouds(clouds_array, 2, 1)
-    cloud2 = Clouds(clouds_array, 2, 3)
-    cloud3 = Clouds(clouds_array, 2, 2)
-    cloud1.create_active()
-    cloud2.create_inactive()
-    cloud3.create_inactive()
-    screen.blit(littledude1, duderect)
-    flames1 = ImageCycle(flamearray1)
-    flames2 = ImageCycle(flamearray2)
-    flamerect = pygame.Rect(duderect.left, duderect.bottom, 30, 60)
-    screen.blit(flames1.get_next(), flamerect)
+    display.update()
     score = 0.0
     pygame.event.post(game_paused("Space To Start"))  # pause game and then return the event
     boots1.play(boots1wav, loops=-1, maxtime=0, fade_ms=0)
@@ -67,18 +55,18 @@ def main():
                 terminate()
             elif event.type == KEYDOWN:
                 if event.key == K_p:
-                    boost = False
+                    dude.flame_boost(boost=False)
                     pygame.event.post(game_paused("PAUSE"))
                 elif event.key == K_ESCAPE:
                     terminate()
                 elif event.key == K_SPACE:
-                    boost = True
+                    dude.flame_boost(boost=True)
                     speed -= 1
             elif event.type == KEYUP:
                 if event.key == K_SPACE:
-                    boost = False
+                    dude.flame_boost(boost=False)
 
-        if boost:
+        if dude.boosting:
             boots1wav.set_volume(0.2)
             if speed > -10:
                 speed -= .65
@@ -86,30 +74,77 @@ def main():
             boots1wav.set_volume(0.05)
             speed += gravity
 
-        if -100 > duderect.bottom or duderect.bottom > (resolution[1] + 100):
+        if -100 > dude.dudeRect.bottom or dude.dudeRect.bottom > (resolution[1] + 100):
             death()
-        duderect = duderect.move(0, speed)
-        screen.blit(background, (0, 0))
-        cloud1.step_move()
-        cloud2.step_move()
-        cloud3.step_move()
-        thislevel.game_tick()
+        collison(dude.dudeRect, this_level.obstaclelist)
+
+        dude.move(speed)
+
         score += .5
         scorestr = str(round(score, 0))
         scoretext = "Score: " + scorestr[:-2]
         make_text_objs((660, 10), scoretext, font18, (0, 0, 0))
-        flamerect = pygame.Rect(duderect.left, duderect.bottom, 30, 60)
-        if boost:
-            screen.blit(flames1.get_next(), flamerect)
-        else:
-            screen.blit(flames2.get_next(), flamerect)
-        screen.blit(littledude1, duderect)
-        collison(duderect, thislevel.obstaclelist)
+
         if debug:
             fpsvar = "FPS: " + str(round(clock.get_fps(), 0))
             make_text_objs((10, 10), fpsvar[:-2], font18, (0, 0, 0), "xy")
-        pygame.display.flip()
+        display.update()
+        this_level.game_tick()
         clock.tick(fps)
+
+
+class Display(object):
+    def __init__(self):
+        self.cloud1 = Clouds(clouds_array, 2, 1)
+        self.cloud2 = Clouds(clouds_array, 2, 3)
+        self.cloud3 = Clouds(clouds_array, 2, 2)
+
+    def new_clouds(self):
+        self.cloud1.create_active()
+        self.cloud2.create_inactive()
+        self.cloud3.create_inactive()
+
+    def update(self):
+        global dude
+        screen.blit(background, (0, 0))
+        self.cloud1.step_move()
+        self.cloud2.step_move()
+        self.cloud3.step_move()
+        for each in this_level.obstaclelist:
+            screen.blit(this_level.image, each.Rect), screen.blit(this_level.image, each.Rect2)
+        this_level.debug()
+        dude.display()
+        pygame.display.flip()
+
+
+class DudeObj(object):
+    def __init__(self):
+        self.dudeimg = load("littledude1.png").convert_alpha()
+        self.dudeRect = pygame.Rect(75, 300, 30, 30)
+        self.flamearray1 = [load("flame1.png").convert_alpha(),
+                            load("flame2.png").convert_alpha()]
+        self.flamearray2 = [load("flame3.png").convert_alpha(),
+                            load("flame4.png").convert_alpha()]
+        self.flame1 = ImageCycle(self.flamearray1)
+        self.flame2 = ImageCycle(self.flamearray2)
+        self.flame = self.flame1.get_next()
+        self.flameRect = pygame.Rect(self.dudeRect.left, self.dudeRect.bottom, 30, 60)
+        self.boosting = False
+
+    def display(self):
+        screen.blit(self.dudeimg, self.dudeRect)
+        screen.blit(self.flame, self.flameRect)
+
+    def flame_boost(self, boost):
+        self.boosting = boost
+        if self.boosting:
+            self.flame = self.flame1.get_next()
+        else:
+            self.flame = self.flame2.get_next()
+
+    def move(self, y, x=0):
+        self.dudeRect = self.dudeRect.move(x, y)
+        self.flameRect = pygame.Rect(self.dudeRect.left, self.dudeRect.bottom, 30, 60)
 
 
 def collison(rect1, rectarray):
@@ -191,6 +226,8 @@ class LevelObj(object):
             del self.obstaclelist[0]
         for each in self.obstaclelist:
             each.step_move()
+
+    def debug(self):
         if debug:
             tick = str(self.tick)
             difficulty = str(self.difficulty)
@@ -280,7 +317,6 @@ class Obstacle(MovingObj):
             if ready:
                 self.Rect.right -= self.speed
                 self.Rect2.right -= self.speed
-            return screen.blit(self.image, self.Rect), screen.blit(self.image, self.Rect2)
 
 
 def make_text_objs(location, text, font, rgb, pos="xy"):
