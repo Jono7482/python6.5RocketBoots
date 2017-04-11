@@ -13,6 +13,7 @@ resolution = 800, 600
 debug = True
 dude = None
 display = None
+gameState = "Loading"
 this_level = None
 audio = None
 score = 0.0
@@ -27,12 +28,16 @@ def main():
     audio = AudioHandler()
     audio.play()
     audio.boots_play()
-    gravity = .25
-    speed = 0
     display.update()
-    pygame.event.post(game_paused("Space To Start"))  # pause game and then return the event
+    pygame.event.post(paused_loop("Space To Start"))  # pause game and then return the event
     score = 0.0
+    game_loop()
 
+
+def game_loop():
+    global score
+    speed = 0
+    gravity = .25
     while True:
         for event in pygame.event.get():
             if event.type == QUIT:
@@ -40,7 +45,7 @@ def main():
             elif event.type == KEYDOWN:
                 if event.key == K_p:
                     dude.flame_boost(boost=False)
-                    pygame.event.post(game_paused("PAUSE"))
+                    pygame.event.post(paused_loop("PAUSE"))
                 elif event.key == K_ESCAPE:
                     terminate()
                 elif event.key == K_SPACE:
@@ -66,6 +71,25 @@ def main():
         score += .5
         display.update()
         this_level.game_tick()
+        clock.tick(fps)
+
+
+def paused_loop(text):
+    if text == "PAUSE":
+        audio.music.pause()
+        display.pause()
+    audio.boots1.pause()
+    make_text_objs((resolution[0] / 2, resolution[1] * .70), text, 50, (0, 0, 0), "center")
+    scoreboardObj.print_board()
+    pygame.display.flip()
+    while True:
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                terminate()
+            elif event.type == KEYDOWN:
+                pygame.mixer.music.unpause()
+                audio.boots1.unpause()
+                return event
         clock.tick(fps)
 
 
@@ -139,25 +163,6 @@ def collison(rect1, rectarray):
         return death()
 
 
-def game_paused(text):
-    if text == "PAUSE":
-        audio.music.pause()
-        display.pause()
-    audio.boots1.pause()
-    make_text_objs((resolution[0] / 2, resolution[1] * .70), text, 50, (0, 0, 0), "center")
-    scoreboardObj.print_board()
-    pygame.display.flip()
-    while True:
-        for event in pygame.event.get():
-            if event.type == QUIT:
-                terminate()
-            elif event.type == KEYDOWN:
-                pygame.mixer.music.unpause()
-                audio.boots1.unpause()
-                return event
-        clock.tick(fps)
-
-
 def death():
     global score
     scoreboardObj.add_score(score)
@@ -192,19 +197,21 @@ class LevelObj(object):
     def __init__(self):
         self.difficulty = 0
         self.gap = 400
+        self.gaptop = 0
+        self.thisgap = 0
         self.image = load("obstacle2.png").convert()
         self.tick = 500
         self.obstaclelist = []
-        self.thisgap = 0
 
     def game_tick(self):
         self.tick += 1
         if self.tick >= 300 - self.difficulty:
             self.tick = 0
             self.difficulty += 2
-            self.thisgap = self.gap - (self.difficulty + rand(0, 20))
+            self.thisgap = self.gap - (self.difficulty + (rand(0, 5) * 4))
+            self.gaptop = rand(0, round((resolution[1] - self.thisgap) / 10, 0)) * 10
             self.obstaclelist.append(Obstacle(self.image, 0, 2))
-            self.obstaclelist[-1].new_set(self.thisgap)
+            self.obstaclelist[-1].new_set(self.thisgap, self.gaptop)
         if len(self.obstaclelist) > 10:
             del self.obstaclelist[0]
         for each in self.obstaclelist:
@@ -299,8 +306,8 @@ class Clouds(MovingObj):
 
 
 class Obstacle(MovingObj):
-    def new_set(self, gap):
-        self.gaptop = rand(0, resolution[1] - gap)
+    def new_set(self, gap, gaptop):
+        self.gaptop = gaptop
         self.Rect2 = self.image.get_rect()
         self.Rect.bottom = self.gaptop
         self.Rect.left = resolution[0]
@@ -350,7 +357,7 @@ class ScoreBoard(object):
     def __init__(self):
         try:
             self.load_scoreboard()
-        except:
+        except OSError:
             self.scoreboard = []
             self.dump_scoreboard()
 
@@ -370,7 +377,7 @@ class ScoreBoard(object):
 
     def print_board(self):
         place = 1
-        name = "Jono"
+        name = "Adam"
         y = 150
         make_text_objs((resolution[0] / 2, y - 50), "High Scores:", 40, (0, 0, 0), "center")
         for each in self.scoreboard:
