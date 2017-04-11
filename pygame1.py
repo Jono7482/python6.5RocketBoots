@@ -1,12 +1,12 @@
 import sys
 import pygame
+import pickle
 from random import randint as rand
 from pygame.image import load as load
 from pygame.locals import *
 
 pygame.mixer.pre_init(44100, -16, 1, 512)
 pygame.init()
-
 clock = pygame.time.Clock()
 fps = 120
 resolution = 800, 600
@@ -14,40 +14,24 @@ debug = True
 dude = None
 display = None
 this_level = None
-
+audio = None
+score = 0.0
 screen = pygame.display.set_mode(resolution)
-
-font18 = pygame.font.Font('freesansbold.ttf', 18)
-font60 = pygame.font.Font('freesansbold.ttf', 60)
-
-background = load("skynb.jpg").convert()
-bgpause = load("bgpaused.png").convert_alpha()
-clouds_array = [load("cloud1.png").convert_alpha(),
-                load("cloud2.png").convert_alpha(),
-                load("cloud3.png").convert_alpha(),
-                load("cloud4.png").convert_alpha()]
-imgobstacle1 = load("obstacle2.png").convert()
-
-music = pygame.mixer.music
-music.load("Indiekid.mp3")
-boots1wav = pygame.mixer.Sound("boots1.wav")
-boots1wav.set_volume(0.1)
-boots1 = pygame.mixer.find_channel()
 
 
 def main():
-    global dude, display, this_level
+    global dude, display, this_level, audio, score
     display = Display()
     dude = DudeObj()
     this_level = LevelObj()
-    music.play(-1, 0.0)
+    audio = AudioHandler()
+    audio.play()
+    audio.boots_play()
     gravity = .25
     speed = 0
-
     display.update()
-    score = 0.0
     pygame.event.post(game_paused("Space To Start"))  # pause game and then return the event
-    boots1.play(boots1wav, loops=-1, maxtime=0, fade_ms=0)
+    score = 0.0
 
     while True:
         for event in pygame.event.get():
@@ -67,27 +51,19 @@ def main():
                     dude.flame_boost(boost=False)
 
         if dude.boosting:
-            boots1wav.set_volume(0.2)
+            audio.boots_volume(0.2)
             if speed > -10:
                 speed -= .65
         else:
-            boots1wav.set_volume(0.05)
+            audio.boots_volume()
             speed += gravity
 
         if -100 > dude.dudeRect.bottom or dude.dudeRect.bottom > (resolution[1] + 100):
             death()
+
         collison(dude.dudeRect, this_level.obstaclelist)
-
         dude.move(speed)
-
         score += .5
-        scorestr = str(round(score, 0))
-        scoretext = "Score: " + scorestr[:-2]
-        make_text_objs((660, 10), scoretext, font18, (0, 0, 0))
-
-        if debug:
-            fpsvar = "FPS: " + str(round(clock.get_fps(), 0))
-            make_text_objs((10, 10), fpsvar[:-2], font18, (0, 0, 0), "xy")
         display.update()
         this_level.game_tick()
         clock.tick(fps)
@@ -95,26 +71,31 @@ def main():
 
 class Display(object):
     def __init__(self):
-        self.cloud1 = Clouds(clouds_array, 2, 1)
-        self.cloud2 = Clouds(clouds_array, 2, 3)
-        self.cloud3 = Clouds(clouds_array, 2, 2)
-
-    def new_clouds(self):
-        self.cloud1.create_active()
-        self.cloud2.create_inactive()
-        self.cloud3.create_inactive()
+        self.background = load("skynb.jpg").convert()
+        self.bgpause = load("bgpaused.png").convert_alpha()
+        self.bgpauserect = self.bgpause.get_rect()
+        self.clouds = create_clouds()
+        self.clouds[0].step_move()
 
     def update(self):
-        global dude
-        screen.blit(background, (0, 0))
-        self.cloud1.step_move()
-        self.cloud2.step_move()
-        self.cloud3.step_move()
+        global dude, score
+        screen.blit(self.background, (0, 0))
+        for each in self.clouds:
+            each.step_move()
         for each in this_level.obstaclelist:
             screen.blit(this_level.image, each.Rect), screen.blit(this_level.image, each.Rect2)
-        this_level.debug()
+        scorestr = str(round(score, 0))
+        scoretext = "Score: " + scorestr[:-2]
+        make_text_objs((660, 10), scoretext, 18, (0, 0, 0))
+        if debug:
+            fpsvar = "FPS: " + str(round(clock.get_fps(), 0))
+            make_text_objs((10, 10), fpsvar[:-2], 18, (0, 0, 0), "xy")
+            this_level.debug()
         dude.display()
         pygame.display.flip()
+
+    def pause(self):
+        screen.blit(self.bgpause, self.bgpauserect)
 
 
 class DudeObj(object):
@@ -160,11 +141,11 @@ def collison(rect1, rectarray):
 
 def game_paused(text):
     if text == "PAUSE":
-        music.pause()
-        bgpauserect = bgpause.get_rect()
-        screen.blit(bgpause, bgpauserect)
-    boots1.pause()
-    make_text_objs((resolution[0] / 2, resolution[1] / 3), text, font60, (0, 0, 0), "center")
+        audio.music.pause()
+        display.pause()
+    audio.boots1.pause()
+    make_text_objs((resolution[0] / 2, resolution[1] * .70), text, 50, (0, 0, 0), "center")
+    scoreboardObj.print_board()
     pygame.display.flip()
     while True:
         for event in pygame.event.get():
@@ -172,18 +153,20 @@ def game_paused(text):
                 terminate()
             elif event.type == KEYDOWN:
                 pygame.mixer.music.unpause()
-                boots1.unpause()
+                audio.boots1.unpause()
                 return event
         clock.tick(fps)
 
 
 def death():
+    global score
+    scoreboardObj.add_score(score)
     main()
 
 
 def terminate():
-    music.stop()
-    boots1.stop()
+    scoreboardObj.dump_scoreboard()
+    pygame.mixer.stop()
     pygame.quit()
     sys.exit()
 
@@ -209,7 +192,7 @@ class LevelObj(object):
     def __init__(self):
         self.difficulty = 0
         self.gap = 400
-        self.image = imgobstacle1
+        self.image = load("obstacle2.png").convert()
         self.tick = 500
         self.obstaclelist = []
         self.thisgap = 0
@@ -228,18 +211,17 @@ class LevelObj(object):
             each.step_move()
 
     def debug(self):
-        if debug:
-            tick = str(self.tick)
-            difficulty = str(self.difficulty)
-            gap = str(self.thisgap)
-            obstacles = str(len(self.obstaclelist))
-            statstext = ("Tick:%s    Difficulty:%s    Gap:%s    Obstacles:%s" % (tick, difficulty, gap, obstacles))
-            make_text_objs((10, 570), statstext, font18, (100, 100, 100), "xy")
+        tick = str(self.tick)
+        difficulty = str(self.difficulty)
+        gap = str(self.thisgap)
+        obstacles = str(len(self.obstaclelist))
+        statstext = ("Tick:%s    Difficulty:%s    Gap:%s    Obstacles:%s" % (tick, difficulty, gap, obstacles))
+        make_text_objs((10, 570), statstext, 18, (100, 100, 100), "xy")
 
 
 class MovingObj(object):
     """
-    moving_ob takes a already loaded image or list of loaded images
+    moving_obj takes a already loaded image or list of loaded images
     tick_skip if given will skip a number of frames
     speed is how many pixels a object will move per frame
     """
@@ -276,8 +258,22 @@ class MovingObj(object):
         return screen.blit(self.image, self.Rect)
 
 
-class Clouds(MovingObj):
+def create_clouds():
+    clouds_array = [load("cloud1.png").convert_alpha(),
+                    load("cloud2.png").convert_alpha(),
+                    load("cloud3.png").convert_alpha(),
+                    load("cloud4.png").convert_alpha()]
+    cloud1 = Clouds(clouds_array, 2, 1)
+    cloud2 = Clouds(clouds_array, 2, 3)
+    cloud3 = Clouds(clouds_array, 2, 2)
+    cloud1.create_active()
+    cloud2.create_inactive()
+    cloud3.create_inactive()
+    clouds = cloud1, cloud2, cloud3
+    return clouds
 
+
+class Clouds(MovingObj):
     def create_active(self):
         start_x = rand(100, 300)
         start_y = rand(-100, 50)
@@ -319,7 +315,8 @@ class Obstacle(MovingObj):
                 self.Rect2.right -= self.speed
 
 
-def make_text_objs(location, text, font, rgb, pos="xy"):
+def make_text_objs(location, text, font_size, rgb, pos="xy"):
+    font = pygame.font.Font('freesansbold.ttf', font_size)
     x, y = location
     textsurf = font.render(text, True, rgb)
     textrect = pygame.Rect(textsurf.get_rect())
@@ -328,6 +325,62 @@ def make_text_objs(location, text, font, rgb, pos="xy"):
     elif pos == "center":
         textrect.center = location
     return screen.blit(textsurf, textrect)
+
+
+class AudioHandler(object):
+    def __init__(self):
+        pygame.mixer.stop()
+        self.music = pygame.mixer.music
+        self.music.load("Indiekid.mp3")
+        self.boots1wav = pygame.mixer.Sound("boots1.wav")
+        self.boots1wav.set_volume(0.05)
+        self.boots1 = pygame.mixer.find_channel()
+
+    def play(self):
+        self.music.play(-1, 0.0)
+
+    def boots_play(self):
+        self.boots1.play(self.boots1wav, loops=-1, maxtime=0, fade_ms=0)
+
+    def boots_volume(self, volume=0.05):
+        self.boots1wav.set_volume(volume)
+
+
+class ScoreBoard(object):
+    def __init__(self):
+        try:
+            self.load_scoreboard()
+        except:
+            self.scoreboard = []
+            self.dump_scoreboard()
+
+    def load_scoreboard(self):
+        self.scoreboard = pickle.load(open("scoreboard.p", "rb"))
+
+    def dump_scoreboard(self):
+        data = self.scoreboard
+        pickle.dump(data, open("scoreboard.p", "wb"))
+
+    def add_score(self, scorev):
+        scorev = int(round(scorev, 0))
+        self.scoreboard.append(scorev)
+        self.scoreboard.sort(reverse=True)
+        if len(self.scoreboard) > 5:
+            self.scoreboard = self.scoreboard[0:5]
+
+    def print_board(self):
+        place = 1
+        name = "Jono"
+        y = 150
+        make_text_objs((resolution[0] / 2, y - 50), "High Scores:", 40, (0, 0, 0), "center")
+        for each in self.scoreboard:
+            text = "%s. %s - %s" % (place, name, each)
+            make_text_objs((resolution[0] / 2, y), text, 30, (0, 0, 0), "center")
+            place += 1
+            y += 40
+
+
+scoreboardObj = ScoreBoard()
 
 
 if __name__ == '__main__':
