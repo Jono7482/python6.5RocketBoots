@@ -1,10 +1,12 @@
 import sys
 import pygame
 import pickle
+import string
 from operator import itemgetter
 from random import randint as rand
 from pygame.image import load as load
 from pygame.locals import *
+
 
 pygame.mixer.pre_init(44100, -16, 1, 512)
 pygame.init()
@@ -126,6 +128,9 @@ class Display(object):
     def pause(self):
         screen.blit(self.bgpause, self.bgpauserect)
 
+    def get_name(self):
+        input_box()
+
 
 class DudeObj(object):
     def __init__(self):
@@ -170,6 +175,7 @@ def collison(rect1, rectarray):
 
 def death():
     global score
+    display.get_name()
     scoreboardObj.add_score(score)
     main()
 
@@ -395,7 +401,7 @@ class ScoreBoard(object):
         try:
             self.load_scoreboard()
         except OSError:
-            self.scoreboard = [["", 0]]
+            self.scoreboard = None
             self.dump_scoreboard()
 
     def load_scoreboard(self):
@@ -403,25 +409,30 @@ class ScoreBoard(object):
 
     def dump_scoreboard(self):
         data = self.scoreboard
-        pickle.dump(data, open("scoreboard.p", "wb"))
+        if self.scoreboard is not None:
+            pickle.dump(data, open("scoreboard.p", "wb"))
 
-    def add_score(self, scorev, name="Jono"):
+    def add_score(self, scorev, name="Jono2"):
+
         scorev = int(round(scorev, 0))
         namescore = [name, scorev]
-        self.scoreboard.append(namescore)
-        print(self.scoreboard)
+        if self.scoreboard is None:
+            self.scoreboard = [namescore]
+        else:
+            self.scoreboard.append(namescore)
         self.scoreboard.sort(reverse=True, key=itemgetter(1))
-        print(self.scoreboard)
         if len(self.scoreboard) > 5:
             self.scoreboard = self.scoreboard[0:5]
 
     def print_board(self):
+        if self.scoreboard is None:
+            return
         place = 1
         y = 150
         make_text_objs((resolution[0] / 2 + 2, y - 48), "High Scores:", 40, (0, 0, 0), "center")
         make_text_objs((resolution[0] / 2, y - 50), "High Scores:", 40, (250, 250, 0), "center")
         for each in self.scoreboard:
-            nametext = "%s. %s" % (place, each[0][0:10])
+            nametext = "%s. %s" % (place, each[0][0:8])
             scoretext = "-   %s" % (each[1])
             make_text_objs((resolution[0] * 0.3 + 2, y + 2), nametext, 30, (0, 0, 0), "xy")
             make_text_objs((resolution[0] * 0.3, y), nametext, 30, (250, 250, 0), "xy")
@@ -429,6 +440,73 @@ class ScoreBoard(object):
             make_text_objs((resolution[0] * 0.54, y), scoretext, 40, (250, 250, 0), "xy")
             place += 1
             y += 40
+
+"""
+http://www.pygame.org/pcr/inputbox/
+by Timothy Downs, inputbox written for my map editor
+
+This program needs a little cleaning up
+It ignores the shift key
+And, for reasons of my own, this program converts "-" to "_"
+
+A program to get user input, allowing backspace etc
+shown in a box in the middle of the screen
+Called by:
+import inputbox
+answer = inputbox.ask(screen, "Your name")
+
+Only near the center of the screen is blitted to
+"""
+
+
+def get_key():
+    while 1:
+        event = pygame.event.poll()
+        if event.type == KEYDOWN:
+            return event.key
+        else:
+            pass
+
+def display_box(message):
+    # "Print a message in a box in the middle of the screen"
+    fontobject = pygame.font.Font(None, 18)
+    pygame.draw.rect(screen, (0, 0, 0),
+                     ((screen.get_width() / 2) - 100,
+                      (screen.get_height() / 2) - 10, 200, 20), 0)
+    pygame.draw.rect(screen, (255, 255 ,255),
+                   ((screen.get_width() / 2) - 102,
+                    (screen.get_height() / 2) - 12,
+                    204, 24), 1)
+    if len(message) != 0:
+        screen.blit(fontobject.render(message, 1, (255, 255, 255)),
+                    ((screen.get_width() / 2) - 100, (screen.get_height() / 2) - 10))
+    pygame.display.flip()
+
+
+def ask(question):
+    # ask(question) -> answer
+    global screen
+    pygame.font.init()
+    current_string = []
+    display_box(question + ": " + "".join(current_string))
+    while 1:
+        inKey = get_key()
+        if inKey == K_BACKSPACE:
+            current_string = current_string[0:-1]
+        elif inKey == K_RETURN:
+            break
+        elif inKey <= 127:
+            current_string.append(chr(inKey))
+            print(current_string)
+            current_string = [c.upper() for c in current_string]
+        display_box(question + ": " + "".join(current_string))
+        print(chr(inKey))
+    return "".join(current_string)
+
+
+def input_box():
+    global screen
+    print(ask("Name") + " was entered")
 
 
 scoreboardObj = ScoreBoard()
