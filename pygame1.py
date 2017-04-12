@@ -1,6 +1,7 @@
 import sys
 import pygame
 import pickle
+from operator import itemgetter
 from random import randint as rand
 from pygame.image import load as load
 from pygame.locals import *
@@ -113,7 +114,8 @@ class Display(object):
             screen.blit(this_level.image, each.Rect), screen.blit(this_level.image, each.Rect2)
         scorestr = str(round(score, 0))
         scoretext = "Score: " + scorestr[:-2]
-        make_text_objs((660, 10), scoretext, 18, (0, 0, 0))
+        make_text_objs((607, 17), scoretext, 30, (0, 0, 0))
+        make_text_objs((605, 15), scoretext, 30, (250, 250, 0))
         if debug:
             fpsvar = "FPS: " + str(round(clock.get_fps(), 0))
             make_text_objs((10, 10), fpsvar[:-2], 18, (0, 0, 0), "xy")
@@ -393,7 +395,7 @@ class ScoreBoard(object):
         try:
             self.load_scoreboard()
         except OSError:
-            self.scoreboard = []
+            self.scoreboard = [["", 0]]
             self.dump_scoreboard()
 
     def load_scoreboard(self):
@@ -403,21 +405,28 @@ class ScoreBoard(object):
         data = self.scoreboard
         pickle.dump(data, open("scoreboard.p", "wb"))
 
-    def add_score(self, scorev):
+    def add_score(self, scorev, name="Jono"):
         scorev = int(round(scorev, 0))
-        self.scoreboard.append(scorev)
-        self.scoreboard.sort(reverse=True)
+        namescore = [name, scorev]
+        self.scoreboard.append(namescore)
+        print(self.scoreboard)
+        self.scoreboard.sort(reverse=True, key=itemgetter(1))
+        print(self.scoreboard)
         if len(self.scoreboard) > 5:
             self.scoreboard = self.scoreboard[0:5]
 
     def print_board(self):
         place = 1
-        name = "Jono"
         y = 150
-        make_text_objs((resolution[0] / 2, y - 50), "High Scores:", 40, (0, 0, 0), "center")
+        make_text_objs((resolution[0] / 2 + 2, y - 48), "High Scores:", 40, (0, 0, 0), "center")
+        make_text_objs((resolution[0] / 2, y - 50), "High Scores:", 40, (250, 250, 0), "center")
         for each in self.scoreboard:
-            text = "%s. %s - %s" % (place, name, each)
-            make_text_objs((resolution[0] / 2, y), text, 30, (0, 0, 0), "center")
+            nametext = "%s. %s" % (place, each[0][0:10])
+            scoretext = "-   %s" % (each[1])
+            make_text_objs((resolution[0] * 0.3 + 2, y + 2), nametext, 30, (0, 0, 0), "xy")
+            make_text_objs((resolution[0] * 0.3, y), nametext, 30, (250, 250, 0), "xy")
+            make_text_objs((resolution[0] * 0.54 + 2, y + 2), scoretext, 40, (0, 0, 0), "xy")
+            make_text_objs((resolution[0] * 0.54, y), scoretext, 40, (250, 250, 0), "xy")
             place += 1
             y += 40
 
