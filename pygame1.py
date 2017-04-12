@@ -37,7 +37,8 @@ def main():
 def game_loop():
     global score
     speed = 0
-    gravity = .25
+    gravity = .35
+    power = .35
     while True:
         for event in pygame.event.get():
             if event.type == QUIT:
@@ -50,15 +51,15 @@ def game_loop():
                     terminate()
                 elif event.key == K_SPACE:
                     dude.flame_boost(boost=True)
-                    speed -= 1
+                    speed -= power
             elif event.type == KEYUP:
                 if event.key == K_SPACE:
                     dude.flame_boost(boost=False)
 
         if dude.boosting:
             audio.boots_volume(0.2)
-            if speed > -10:
-                speed -= .65
+            if speed > -9:
+                speed -= power
         else:
             audio.boots_volume()
             speed += gravity
@@ -100,10 +101,12 @@ class Display(object):
         self.bgpauserect = self.bgpause.get_rect()
         self.clouds = create_clouds()
         self.clouds[0].step_move()
+        self.hills = create_hills()
 
     def update(self):
         global dude, score
         screen.blit(self.background, (0, 0))
+        self.hills.step_move()
         for each in self.clouds:
             each.step_move()
         for each in this_level.obstaclelist:
@@ -207,9 +210,11 @@ class LevelObj(object):
         self.tick += 1
         if self.tick >= 300 - self.difficulty:
             self.tick = 0
-            self.difficulty += 2
+            if self.difficulty < 200:
+                self.difficulty += 3
             self.thisgap = self.gap - (self.difficulty + (rand(0, 5) * 4))
-            self.gaptop = rand(0, round((resolution[1] - self.thisgap) / 10, 0)) * 10
+            # self.gaptop = rand(0, round((resolution[1] - self.thisgap) / 10, 0)) * 10
+            self.gaptop = rand(1, 9) * ((resolution[1] - self.thisgap) / 10)
             self.obstaclelist.append(Obstacle(self.image, 0, 2))
             self.obstaclelist[-1].new_set(self.thisgap, self.gaptop)
         if len(self.obstaclelist) > 10:
@@ -265,14 +270,44 @@ class MovingObj(object):
         return screen.blit(self.image, self.Rect)
 
 
+def create_hills():
+    hillsarray = [load("hills1.png").convert_alpha(),
+                  load("hills2.png").convert_alpha()]
+    hills = Hills(hillsarray, 3, 1)
+    hills.create()
+    return hills
+
+
+class Hills(MovingObj):
+    def create(self):
+        self.Rect = self.image_array[0].get_rect()
+        self.Rect2 = self.image_array[1].get_rect()
+        self.Rect.bottomleft = (0, resolution[1])
+        self.Rect2.bottomleft = self.Rect.bottomright
+
+    def step_move(self):
+        ready = self.tick()
+        if ready:
+            if self.Rect.right > 0:
+                self.Rect = self.Rect.move(-self.speed, 0)
+            else:
+                self.Rect.left = resolution[0]
+            if self.Rect2.right > 0:
+                self.Rect2 = self.Rect2.move(-self.speed, 0)
+            else:
+                self.Rect2.left = resolution[0]
+        screen.blit(self.image_array[0], self.Rect)
+        screen.blit(self.image_array[1], self.Rect2)
+
+
 def create_clouds():
     clouds_array = [load("cloud1.png").convert_alpha(),
                     load("cloud2.png").convert_alpha(),
                     load("cloud3.png").convert_alpha(),
                     load("cloud4.png").convert_alpha()]
-    cloud1 = Clouds(clouds_array, 2, 1)
+    cloud1 = Clouds(clouds_array, 2, 2)
     cloud2 = Clouds(clouds_array, 2, 3)
-    cloud3 = Clouds(clouds_array, 2, 2)
+    cloud3 = Clouds(clouds_array, 2, 4)
     cloud1.create_active()
     cloud2.create_inactive()
     cloud3.create_inactive()
@@ -377,7 +412,7 @@ class ScoreBoard(object):
 
     def print_board(self):
         place = 1
-        name = "Adam"
+        name = "Jono"
         y = 150
         make_text_objs((resolution[0] / 2, y - 50), "High Scores:", 40, (0, 0, 0), "center")
         for each in self.scoreboard:
