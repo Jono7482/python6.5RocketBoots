@@ -53,7 +53,7 @@ def main():
 def game_loop():
     global score
     speed = 0
-    gravity = .35
+    gravity = .30
     power = .35
     while True:
         for event in pygame.event.get():
@@ -144,19 +144,20 @@ class Display(object):
 
     def display_box(self, message):
         # "Print a message in a box in the middle of the screen"
-        fontobject = pygame.font.Font(None, 18)
-        pygame.draw.rect(screen, (0, 0, 0),
-                         ((screen.get_width() / 2) - 100,
-                          (screen.get_height() / 2) - 10, 200, 20), 0)
-        pygame.draw.rect(screen, (255, 255, 255),
-                         ((screen.get_width() / 2) - 102,
-                          (screen.get_height() / 2) - 12,
-                          204, 24), 1)
+        rect1 = pygame.Rect(0, 0, 100, 20)
+        rect1.center = resolution[0]/2, resolution[1] * .4
+        rect2 = rect1.copy()
+        rect3 = rect1.copy()
+        rect4 = rect1.copy()
+
+        rect2.size = rect1.width + 4, rect1.height + 4
+        rect3 = rect3.move(-2, -2)
+
+        pygame.draw.rect(screen, (0, 0, 0), rect2, 0)
+        pygame.draw.rect(screen, (255, 255, 255), rect1, 0)
         if len(message) != 0:
-            make_text_objs((resolution[0] * 0.3 + 2, 150 + 2), message, 18, (0, 0, 0), "xy")
-            make_text_objs((resolution[0] * 0.3, 150), message, 18, (0, 0, 0), "xy")
-            screen.blit(fontobject.render(message, 1, (255, 255, 255)),
-                        ((screen.get_width() / 2) - 100, (screen.get_height() / 2) - 10))
+            make_text_objs(rect3.center, message, 18, (0, 0, 0), "center")
+            make_text_objs(rect4.center, message, 18, (250, 250, 0), "center")
         pygame.display.flip()
 
 
@@ -429,19 +430,19 @@ class ScoreBoard(object):
     def add_score(self, scorev, name=""):
         scorev = int(round(scorev, 0))
         index = 1
-        for each in self.scoreboard:
-            if index > 5:
-                break
-            if each[1] <= scorev:
-                name = ask_name()
-                break
-            else:
-                index += 1
-        namescore = [name, scorev]
         if self.scoreboard is None:
-            self.scoreboard = [namescore]
+            name = ask_name()
         else:
-            self.scoreboard.append(namescore)
+            for each in self.scoreboard:
+                if index > 5:
+                    break
+                if each[1] <= scorev:
+                    name = ask_name()
+                    break
+                else:
+                    index += 1
+        name_score = [name, scorev]
+        self.scoreboard.append(name_score)
         self.scoreboard.sort(reverse=True, key=itemgetter(1))
         if len(self.scoreboard) > 5:
             self.scoreboard = self.scoreboard[0:5]
