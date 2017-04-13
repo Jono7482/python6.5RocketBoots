@@ -23,6 +23,19 @@ score = 0.0
 screen = pygame.display.set_mode(resolution)
 
 
+def death():
+    global score
+    scoreboardObj.add_score(score)
+    main()
+
+
+def terminate():
+    scoreboardObj.dump_scoreboard()
+    pygame.mixer.stop()
+    pygame.quit()
+    sys.exit()
+
+
 def main():
     global dude, display, this_level, audio, score
     display = Display()
@@ -95,6 +108,7 @@ def paused_loop(text):
                 audio.boots1.unpause()
                 return event
         clock.tick(fps)
+        pass
 
 
 class Display(object):
@@ -128,8 +142,22 @@ class Display(object):
     def pause(self):
         screen.blit(self.bgpause, self.bgpauserect)
 
-    def get_name(self):
-        input_box()
+    def display_box(self, message):
+        # "Print a message in a box in the middle of the screen"
+        fontobject = pygame.font.Font(None, 18)
+        pygame.draw.rect(screen, (0, 0, 0),
+                         ((screen.get_width() / 2) - 100,
+                          (screen.get_height() / 2) - 10, 200, 20), 0)
+        pygame.draw.rect(screen, (255, 255, 255),
+                         ((screen.get_width() / 2) - 102,
+                          (screen.get_height() / 2) - 12,
+                          204, 24), 1)
+        if len(message) != 0:
+            make_text_objs((resolution[0] * 0.3 + 2, 150 + 2), message, 18, (0, 0, 0), "xy")
+            make_text_objs((resolution[0] * 0.3, 150), message, 18, (0, 0, 0), "xy")
+            screen.blit(fontobject.render(message, 1, (255, 255, 255)),
+                        ((screen.get_width() / 2) - 100, (screen.get_height() / 2) - 10))
+        pygame.display.flip()
 
 
 class DudeObj(object):
@@ -171,20 +199,6 @@ def collison(rect1, rectarray):
         return
     else:
         return death()
-
-
-def death():
-    global score
-    display.get_name()
-    scoreboardObj.add_score(score)
-    main()
-
-
-def terminate():
-    scoreboardObj.dump_scoreboard()
-    pygame.mixer.stop()
-    pygame.quit()
-    sys.exit()
 
 
 class ImageCycle(object):
@@ -412,9 +426,17 @@ class ScoreBoard(object):
         if self.scoreboard is not None:
             pickle.dump(data, open("scoreboard.p", "wb"))
 
-    def add_score(self, scorev, name="Jono2"):
-
+    def add_score(self, scorev, name=""):
         scorev = int(round(scorev, 0))
+        index = 1
+        for each in self.scoreboard:
+            if index > 5:
+                break
+            if each[1] <= scorev:
+                name = ask_name()
+                break
+            else:
+                index += 1
         namescore = [name, scorev]
         if self.scoreboard is None:
             self.scoreboard = [namescore]
@@ -432,82 +454,55 @@ class ScoreBoard(object):
         make_text_objs((resolution[0] / 2 + 2, y - 48), "High Scores:", 40, (0, 0, 0), "center")
         make_text_objs((resolution[0] / 2, y - 50), "High Scores:", 40, (250, 250, 0), "center")
         for each in self.scoreboard:
-            nametext = "%s. %s" % (place, each[0][0:8])
-            scoretext = "-   %s" % (each[1])
-            make_text_objs((resolution[0] * 0.3 + 2, y + 2), nametext, 30, (0, 0, 0), "xy")
-            make_text_objs((resolution[0] * 0.3, y), nametext, 30, (250, 250, 0), "xy")
-            make_text_objs((resolution[0] * 0.54 + 2, y + 2), scoretext, 40, (0, 0, 0), "xy")
-            make_text_objs((resolution[0] * 0.54, y), scoretext, 40, (250, 250, 0), "xy")
+            if each[0] == "":
+                each[0] = "-  -  -  -"
+            name_text = "%s. %s" % (place, each[0][0:10])
+            score_text = "-   %s" % (each[1])
+            make_text_objs((resolution[0] * 0.3 + 2, y + 2), name_text, 30, (0, 0, 0), "xy")
+            make_text_objs((resolution[0] * 0.3, y), name_text, 30, (250, 250, 0), "xy")
+            make_text_objs((resolution[0] * 0.54 + 2, y + 2), score_text, 40, (0, 0, 0), "xy")
+            make_text_objs((resolution[0] * 0.54, y), score_text, 40, (250, 250, 0), "xy")
             place += 1
             y += 40
 
 """
 http://www.pygame.org/pcr/inputbox/
 by Timothy Downs, inputbox written for my map editor
-
-This program needs a little cleaning up
-It ignores the shift key
-And, for reasons of my own, this program converts "-" to "_"
-
-A program to get user input, allowing backspace etc
-shown in a box in the middle of the screen
-Called by:
-import inputbox
-answer = inputbox.ask(screen, "Your name")
-
-Only near the center of the screen is blitted to
 """
 
 
 def get_key():
     while 1:
         event = pygame.event.poll()
+        if event.type == QUIT:
+            terminate()
         if event.type == KEYDOWN:
-            return event.key
+            if event.key == K_ESCAPE:
+                terminate()
+            else:
+                return event.key
         else:
+            clock.tick(fps)
             pass
 
-def display_box(message):
-    # "Print a message in a box in the middle of the screen"
-    fontobject = pygame.font.Font(None, 18)
-    pygame.draw.rect(screen, (0, 0, 0),
-                     ((screen.get_width() / 2) - 100,
-                      (screen.get_height() / 2) - 10, 200, 20), 0)
-    pygame.draw.rect(screen, (255, 255 ,255),
-                   ((screen.get_width() / 2) - 102,
-                    (screen.get_height() / 2) - 12,
-                    204, 24), 1)
-    if len(message) != 0:
-        screen.blit(fontobject.render(message, 1, (255, 255, 255)),
-                    ((screen.get_width() / 2) - 100, (screen.get_height() / 2) - 10))
-    pygame.display.flip()
 
-
-def ask(question):
+def ask_name():
     # ask(question) -> answer
     global screen
     pygame.font.init()
     current_string = []
-    display_box(question + ": " + "".join(current_string))
+    display.display_box("".join(current_string))
     while 1:
-        inKey = get_key()
-        if inKey == K_BACKSPACE:
+        in_key = get_key()
+        if in_key == K_BACKSPACE:
             current_string = current_string[0:-1]
-        elif inKey == K_RETURN:
+        elif in_key == K_RETURN:
             break
-        elif inKey <= 127:
-            current_string.append(chr(inKey))
-            print(current_string)
+        elif in_key <= 127:
+            current_string.append(chr(in_key))
             current_string = [c.upper() for c in current_string]
-        display_box(question + ": " + "".join(current_string))
-        print(chr(inKey))
+        display.display_box("".join(current_string))
     return "".join(current_string)
-
-
-def input_box():
-    global screen
-    print(ask("Name") + " was entered")
-
 
 scoreboardObj = ScoreBoard()
 
