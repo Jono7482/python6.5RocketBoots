@@ -1,19 +1,18 @@
 import sys
 import pygame
 import pickle
-import string
 from operator import itemgetter
 from random import randint as rand
 from pygame.image import load as load
 from pygame.locals import *
 
 
-pygame.mixer.pre_init(44100, -16, 1, 512)
+pygame.mixer.pre_init(44100, -16, 1, 512)  # Fix for delay in audio
 pygame.init()
 clock = pygame.time.Clock()
 fps = 120
 resolution = 800, 600
-debug = True
+debug = True  # enables/disables fps display and debug info
 dude = None
 display = None
 gameState = "Loading"
@@ -21,8 +20,10 @@ this_level = None
 audio = None
 score = 0.0
 screen = pygame.display.set_mode(resolution)
+
 black = (0, 0, 0)
 yellow = (250, 250, 0)
+
 
 def death():
     global score
@@ -106,8 +107,7 @@ def paused_loop(text):
         audio.music.pause()
         display.pause()
     audio.boots1.pause()
-    make_text_objs((resolution[0] / 2 -2, resolution[1] * .70 - 2), text, 50, black, "center")
-    make_text_objs((resolution[0] / 2, resolution[1] * .70), text, 50, yellow, "center")
+    make_text_objs((resolution[0] / 2, resolution[1] * .70), text, 50, yellow, black, "center")
     if gameState != "Loading":
         scoreboardObj.print_board()
     pygame.display.flip()
@@ -125,6 +125,7 @@ def paused_loop(text):
 
 class Display(object):
     global gameState
+
     def __init__(self):
         self.background = load("skynb.jpg").convert()
         self.bgpause = load("bgpaused.png").convert_alpha()
@@ -149,11 +150,10 @@ class Display(object):
             screen.blit(this_level.image, each.Rect), screen.blit(this_level.image, each.Rect2)
         scorestr = str(round(score, 0))
         scoretext = "Score: " + scorestr[:-2]
-        make_text_objs((607, 17), scoretext, 30, (0, 0, 0))
-        make_text_objs((605, 15), scoretext, 30, (250, 250, 0))
+        make_text_objs((605, 15), scoretext, 30, yellow, black)
         if debug:
             fpsvar = "FPS: " + str(round(clock.get_fps(), 0))
-            make_text_objs((10, 10), fpsvar[:-2], 18, (0, 0, 0), "xy")
+            make_text_objs((10, 10), fpsvar[:-2], 18, black, pos="xy")
             this_level.debug()
         dude.display()
         if gameState != "scoreboard":
@@ -167,12 +167,11 @@ class Display(object):
         scoreboardObj.print_board()
         if len(message) == 0:
             message = "[NAME] "
-        make_text_objs((resolution[0] * 0.3 + 2 + 20 - 3, y + 2), ("  " + message), 30, black, "xy")
-        make_text_objs((resolution[0] * 0.3 + 20 - 3, y), ("  " + message), 30, yellow, "xy")
-        make_text_objs((resolution[0] / 2 - 2, resolution[1] * .68 + 2), ("New High Score!!!"), 45, black, "center")
-        make_text_objs((resolution[0] / 2, resolution[1] * .68), ("New High Score!!!"), 45, yellow, "center")
-        make_text_objs((resolution[0] / 2 - 2, resolution[1] * .75 + 2), ("Type your name then press [Enter]"), 30, black, "center")
-        make_text_objs((resolution[0] / 2, resolution[1] * .75), ("Type your name then press [Enter]"), 30, yellow, "center")
+        make_text_objs((resolution[0] * 0.3 + 20 - 3, y), ("  " + message), 30, yellow, black, "xy")
+        make_text_objs((resolution[0] / 2, resolution[1] * .68),
+                       "New High Score!!!", 45, yellow, black, "center")
+        make_text_objs((resolution[0] / 2, resolution[1] * .75),
+                       "Type your name then press [Enter]", 30, yellow, black, "center")
         pygame.display.flip()
 
 
@@ -184,9 +183,9 @@ class DudeObj(object):
                             load("flame2.png").convert_alpha()]
         self.flamearray2 = [load("flame3.png").convert_alpha(),
                             load("flame4.png").convert_alpha()]
-        self.flame1 = ImageCycle(self.flamearray1)
-        self.flame2 = ImageCycle(self.flamearray2)
-        self.flame = self.flame1.get_next()
+        self.flame1 = self.flamearray1[(rand(0, len(self.flamearray1) - 1))]
+        self.flame2 = self.flamearray2[(rand(0, len(self.flamearray2) - 1))]
+        self.flame = self.flame1
         self.flameRect = pygame.Rect(self.dudeRect.left, self.dudeRect.bottom, 30, 60)
         self.boosting = False
 
@@ -197,9 +196,9 @@ class DudeObj(object):
     def flame_boost(self, boost):
         self.boosting = boost
         if self.boosting:
-            self.flame = self.flame1.get_next()
+            self.flame = self.flamearray1[(rand(0, len(self.flamearray1) - 1))]
         else:
-            self.flame = self.flame2.get_next()
+            self.flame = self.flamearray2[(rand(0, len(self.flamearray2) - 1))]
 
     def move(self, y, x=0):
         self.dudeRect = self.dudeRect.move(x, y)
@@ -207,7 +206,7 @@ class DudeObj(object):
 
 
 def collison(rect1, rectarray):
-    global  gameState
+    global gameState
     rectlist = []
     for each in rectarray:
         rectlist.append(each.Rect)
@@ -217,23 +216,6 @@ def collison(rect1, rectarray):
     else:
         gameState = "dead"
         return death()
-
-
-class ImageCycle(object):
-    def __init__(self, imagearray):
-        self.array = imagearray
-        self.index = 0
-        self.image = None
-
-    def get_next(self):
-        if self.index <= (len(self.array) - 1) * 2:
-            self.image = self.array[int(self.index / 2)]
-            self.index += 1
-            return self.image
-        else:
-            self.image = self.array[0]
-            self.index = 0
-            return self.image
 
 
 class LevelObj(object):
@@ -268,7 +250,7 @@ class LevelObj(object):
         gap = str(self.thisgap)
         obstacles = str(len(self.obstaclelist))
         statstext = ("Tick:%s    Difficulty:%s    Gap:%s    Obstacles:%s" % (tick, difficulty, gap, obstacles))
-        make_text_objs((10, 570), statstext, 18, (100, 100, 100), "xy")
+        make_text_objs((10, 570), statstext, 18, (100, 100, 100), pos="xy")
 
 
 class MovingObj(object):
@@ -397,7 +379,7 @@ class Obstacle(MovingObj):
                 self.Rect2.right -= self.speed
 
 
-def make_text_objs(location, text, font_size, rgb, pos="xy"):
+def make_text_objs(location, text, font_size=30, rgb=black, shadow=None, pos="xy"):
     font = pygame.font.Font('freesansbold.ttf', font_size)
     x, y = location
     textsurf = font.render(text, True, rgb)
@@ -406,6 +388,11 @@ def make_text_objs(location, text, font_size, rgb, pos="xy"):
         textrect = textrect.move(x, y)
     elif pos == "center":
         textrect.center = location
+    if shadow is not None:
+        textsurf2 = font.render(text, True, shadow)
+        textrect2 = textrect.copy()
+        textrect2 = textrect2.move(+ 2, + 2)
+        return screen.blit(textsurf2, textrect2), screen.blit(textsurf, textrect)
     return screen.blit(textsurf, textrect)
 
 
@@ -480,17 +467,14 @@ class ScoreBoard(object):
             return
         place = 1
         y = 150
-        make_text_objs((resolution[0] / 2 + 2, y - 48), "High Scores:", 40, black, "center")
-        make_text_objs((resolution[0] / 2, y - 50), "High Scores:", 40, yellow, "center")
+        make_text_objs((resolution[0] / 2, y - 50), "High Scores:", 40, yellow, black, "center")
         for each in self.scoreboard:
-            if each[0] == None:
+            if each[0] is None:
                 each[0] = "-  -  -  -"
             name_text = "%s. %s" % (place, each[0][0:10])
             score_text = "-   %s" % (each[1])
-            make_text_objs((resolution[0] * 0.3 + 2, y + 2), name_text, 30, black, "xy")
-            make_text_objs((resolution[0] * 0.3, y), name_text, 30, yellow, "xy")
-            make_text_objs((resolution[0] * 0.54 + 2, y + 2), score_text, 40, black, "xy")
-            make_text_objs((resolution[0] * 0.54, y), score_text, 40, yellow, "xy")
+            make_text_objs((resolution[0] * 0.3, y), name_text, 30, yellow, black, "xy")
+            make_text_objs((resolution[0] * 0.54, y), score_text, 40, yellow, black, "xy")
             place += 1
             y += 40
 
