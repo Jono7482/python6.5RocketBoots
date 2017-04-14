@@ -21,10 +21,13 @@ this_level = None
 audio = None
 score = 0.0
 screen = pygame.display.set_mode(resolution)
-
+black = (0, 0, 0)
+yellow = (250, 250, 0)
 
 def death():
     global score
+    audio.boots1.pause()
+    clock.tick(5)
     scoreboardObj.add_score(score)
     main()
 
@@ -43,7 +46,6 @@ def main():
     this_level = LevelObj()
     audio = AudioHandler()
     audio.play()
-    audio.boots_play()
     display.update()
     pygame.event.post(paused_loop("Space To Start"))  # pause game and then return the event
     score = 0.0
@@ -51,7 +53,9 @@ def main():
 
 
 def game_loop():
-    global score
+    global score, gameState, audio
+    gameState = "playing"
+    audio.boots_play()
     speed = 0
     gravity = .30
     power = .35
@@ -63,6 +67,9 @@ def game_loop():
                 if event.key == K_p:
                     dude.flame_boost(boost=False)
                     pygame.event.post(paused_loop("PAUSE"))
+                    audio.music.unpause()
+                    audio.boots1.unpause()
+                    clock.tick(20)
                 elif event.key == K_ESCAPE:
                     terminate()
                 elif event.key == K_SPACE:
@@ -92,26 +99,32 @@ def game_loop():
 
 
 def paused_loop(text):
+    global gameState
+    oldstate = gameState
     if text == "PAUSE":
+        gameState = "paused"
         audio.music.pause()
         display.pause()
     audio.boots1.pause()
-    make_text_objs((resolution[0] / 2, resolution[1] * .70), text, 50, (0, 0, 0), "center")
-    scoreboardObj.print_board()
+    make_text_objs((resolution[0] / 2 -2, resolution[1] * .70 - 2), text, 50, black, "center")
+    make_text_objs((resolution[0] / 2, resolution[1] * .70), text, 50, yellow, "center")
+    if gameState != "Loading":
+        scoreboardObj.print_board()
     pygame.display.flip()
     while True:
         for event in pygame.event.get():
             if event.type == QUIT:
                 terminate()
             elif event.type == KEYDOWN:
-                pygame.mixer.music.unpause()
-                audio.boots1.unpause()
-                return event
+                if event.key == K_SPACE:
+                    gameState = oldstate
+                    return event
         clock.tick(fps)
         pass
 
 
 class Display(object):
+    global gameState
     def __init__(self):
         self.background = load("skynb.jpg").convert()
         self.bgpause = load("bgpaused.png").convert_alpha()
@@ -123,9 +136,15 @@ class Display(object):
     def update(self):
         global dude, score
         screen.blit(self.background, (0, 0))
-        self.hills.step_move()
+        if gameState != "scoreboard":
+            self.hills.step_move()
+        else:
+            self.hills.post()
         for each in self.clouds:
-            each.step_move()
+            if gameState != "scoreboard":
+                each.step_move()
+            else:
+                each.post()
         for each in this_level.obstaclelist:
             screen.blit(this_level.image, each.Rect), screen.blit(this_level.image, each.Rect2)
         scorestr = str(round(score, 0))
@@ -137,34 +156,30 @@ class Display(object):
             make_text_objs((10, 10), fpsvar[:-2], 18, (0, 0, 0), "xy")
             this_level.debug()
         dude.display()
-        pygame.display.flip()
+        if gameState != "scoreboard":
+            pygame.display.flip()
 
     def pause(self):
         screen.blit(self.bgpause, self.bgpauserect)
 
-    def display_box(self, message):
-        # "Print a message in a box in the middle of the screen"
-        rect1 = pygame.Rect(0, 0, 100, 20)
-        rect1.center = resolution[0]/2, resolution[1] * .4
-        rect2 = rect1.copy()
-        rect3 = rect1.copy()
-        rect4 = rect1.copy()
-
-        rect2.size = rect1.width + 4, rect1.height + 4
-        rect3 = rect3.move(-2, -2)
-
-        pygame.draw.rect(screen, (0, 0, 0), rect2, 0)
-        pygame.draw.rect(screen, (255, 255, 255), rect1, 0)
-        if len(message) != 0:
-            make_text_objs(rect3.center, message, 18, (0, 0, 0), "center")
-            make_text_objs(rect4.center, message, 18, (250, 250, 0), "center")
+    def display_box(self, message, y):
+        self.update()
+        scoreboardObj.print_board()
+        if len(message) == 0:
+            message = "[NAME] "
+        make_text_objs((resolution[0] * 0.3 + 2 + 20 - 3, y + 2), ("  " + message), 30, black, "xy")
+        make_text_objs((resolution[0] * 0.3 + 20 - 3, y), ("  " + message), 30, yellow, "xy")
+        make_text_objs((resolution[0] / 2 - 2, resolution[1] * .68 + 2), ("New High Score!!!"), 45, black, "center")
+        make_text_objs((resolution[0] / 2, resolution[1] * .68), ("New High Score!!!"), 45, yellow, "center")
+        make_text_objs((resolution[0] / 2 - 2, resolution[1] * .75 + 2), ("Type your name then press [Enter]"), 30, black, "center")
+        make_text_objs((resolution[0] / 2, resolution[1] * .75), ("Type your name then press [Enter]"), 30, yellow, "center")
         pygame.display.flip()
 
 
 class DudeObj(object):
     def __init__(self):
         self.dudeimg = load("littledude1.png").convert_alpha()
-        self.dudeRect = pygame.Rect(75, 300, 30, 30)
+        self.dudeRect = pygame.Rect(75, 300, 27, 30)
         self.flamearray1 = [load("flame1.png").convert_alpha(),
                             load("flame2.png").convert_alpha()]
         self.flamearray2 = [load("flame3.png").convert_alpha(),
@@ -192,6 +207,7 @@ class DudeObj(object):
 
 
 def collison(rect1, rectarray):
+    global  gameState
     rectlist = []
     for each in rectarray:
         rectlist.append(each.Rect)
@@ -199,6 +215,7 @@ def collison(rect1, rectarray):
     if rect1.collidelist(rectlist) == -1:
         return
     else:
+        gameState = "dead"
         return death()
 
 
@@ -400,12 +417,14 @@ class AudioHandler(object):
         self.boots1wav = pygame.mixer.Sound("boots1.wav")
         self.boots1wav.set_volume(0.05)
         self.boots1 = pygame.mixer.find_channel()
+        self.play()
 
     def play(self):
         self.music.play(-1, 0.0)
 
     def boots_play(self):
         self.boots1.play(self.boots1wav, loops=-1, maxtime=0, fade_ms=0)
+        self.boots1.unpause()
 
     def boots_volume(self, volume=0.05):
         self.boots1wav.set_volume(volume)
@@ -416,7 +435,7 @@ class ScoreBoard(object):
         try:
             self.load_scoreboard()
         except OSError:
-            self.scoreboard = None
+            self.scoreboard = [["", 0], ["", 0], ["", 0], ["", 0], ["", 0]]
             self.dump_scoreboard()
 
     def load_scoreboard(self):
@@ -424,52 +443,56 @@ class ScoreBoard(object):
 
     def dump_scoreboard(self):
         data = self.scoreboard
-        if self.scoreboard is not None:
+        try:
             pickle.dump(data, open("scoreboard.p", "wb"))
+        except OSError:
+            print("Can't Dump Scoreboard")
 
-    def add_score(self, scorev, name=""):
+    def add_score(self, scorev=-1):
+        global gameState
+        gameState = "scoreboard"
         scorev = int(round(scorev, 0))
-        index = 1
+
         if self.scoreboard is None:
-            name = ask_name()
+            self.scoreboard = [["", 0], ["", 0], ["", 0], ["", 0], ["", 0]]
         else:
+            index = 1
             for each in self.scoreboard:
                 if index > 5:
                     break
-                if each[1] <= scorev:
-                    name = ask_name()
+                elif each[1] < scorev:
+                    name_score = ["", scorev]
+                    self.scoreboard.append(name_score)
+                    self.scoreboard.sort(reverse=True, key=itemgetter(1))
+                    if len(self.scoreboard) > 5:
+                        self.scoreboard = self.scoreboard[0:5]
+                    self.print_board()
+                    y = 150 + (index - 1) * 40
+                    self.scoreboard[index - 1][0] = ask_name(y)
                     break
                 else:
                     index += 1
-        name_score = [name, scorev]
-        self.scoreboard.append(name_score)
-        self.scoreboard.sort(reverse=True, key=itemgetter(1))
-        if len(self.scoreboard) > 5:
-            self.scoreboard = self.scoreboard[0:5]
 
     def print_board(self):
+        global gameState
+        gameState = "scoreboard"
         if self.scoreboard is None:
             return
         place = 1
         y = 150
-        make_text_objs((resolution[0] / 2 + 2, y - 48), "High Scores:", 40, (0, 0, 0), "center")
-        make_text_objs((resolution[0] / 2, y - 50), "High Scores:", 40, (250, 250, 0), "center")
+        make_text_objs((resolution[0] / 2 + 2, y - 48), "High Scores:", 40, black, "center")
+        make_text_objs((resolution[0] / 2, y - 50), "High Scores:", 40, yellow, "center")
         for each in self.scoreboard:
-            if each[0] == "":
+            if each[0] == None:
                 each[0] = "-  -  -  -"
             name_text = "%s. %s" % (place, each[0][0:10])
             score_text = "-   %s" % (each[1])
-            make_text_objs((resolution[0] * 0.3 + 2, y + 2), name_text, 30, (0, 0, 0), "xy")
-            make_text_objs((resolution[0] * 0.3, y), name_text, 30, (250, 250, 0), "xy")
-            make_text_objs((resolution[0] * 0.54 + 2, y + 2), score_text, 40, (0, 0, 0), "xy")
-            make_text_objs((resolution[0] * 0.54, y), score_text, 40, (250, 250, 0), "xy")
+            make_text_objs((resolution[0] * 0.3 + 2, y + 2), name_text, 30, black, "xy")
+            make_text_objs((resolution[0] * 0.3, y), name_text, 30, yellow, "xy")
+            make_text_objs((resolution[0] * 0.54 + 2, y + 2), score_text, 40, black, "xy")
+            make_text_objs((resolution[0] * 0.54, y), score_text, 40, yellow, "xy")
             place += 1
             y += 40
-
-"""
-http://www.pygame.org/pcr/inputbox/
-by Timothy Downs, inputbox written for my map editor
-"""
 
 
 def get_key():
@@ -487,12 +510,13 @@ def get_key():
             pass
 
 
-def ask_name():
+def ask_name(y):
     # ask(question) -> answer
-    global screen
+    global screen, gameState
+    gameState = "scoreboard"
     pygame.font.init()
     current_string = []
-    display.display_box("".join(current_string))
+    display.display_box("".join(current_string), y)
     while 1:
         in_key = get_key()
         if in_key == K_BACKSPACE:
@@ -502,8 +526,12 @@ def ask_name():
         elif in_key <= 127:
             current_string.append(chr(in_key))
             current_string = [c.upper() for c in current_string]
-        display.display_box("".join(current_string))
-    return "".join(current_string)
+        display.display_box("".join(current_string), y)
+        clock.tick(fps)
+    name = "".join(current_string)
+    if name == "":
+        name = None
+    return name
 
 scoreboardObj = ScoreBoard()
 
