@@ -46,7 +46,6 @@ def main():
     dude = DudeObj()
     this_level = LevelObj()
     audio = AudioHandler()
-    audio.play()
     display.update()
     pygame.event.post(paused_loop("Space To Start"))  # pause game and then return the event
     score = 0.0
@@ -56,17 +55,15 @@ def main():
 def game_loop():
     global score, gameState, audio
     gameState = "playing"
+    audio.play()
     audio.boots_play()
-    speed = 0
-    gravity = .30
-    power = .35
     while True:
         for event in pygame.event.get():
             if event.type == QUIT:
                 terminate()
             elif event.type == KEYDOWN:
                 if event.key == K_p:
-                    dude.flame_boost(boost=False)
+                    dude.flame_boost()
                     pygame.event.post(paused_loop("PAUSE"))
                     audio.music.unpause()
                     audio.boots1.unpause()
@@ -75,24 +72,13 @@ def game_loop():
                     terminate()
                 elif event.key == K_SPACE:
                     dude.flame_boost(boost=True)
-                    speed -= power
             elif event.type == KEYUP:
                 if event.key == K_SPACE:
-                    dude.flame_boost(boost=False)
+                    dude.flame_boost()
 
-        if dude.boosting:
-            audio.boots_volume(0.2)
-            if speed > -9:
-                speed -= power
-        else:
-            audio.boots_volume()
-            speed += gravity
+        dude.tick()
+        collision()
 
-        if -100 > dude.dudeRect.bottom or dude.dudeRect.bottom > (resolution[1] + 100):
-            death()
-
-        collison(dude.dudeRect, this_level.obstaclelist)
-        dude.move(speed)
         score += .5
         display.update()
         this_level.game_tick()
@@ -101,7 +87,7 @@ def game_loop():
 
 def paused_loop(text):
     global gameState
-    oldstate = gameState
+    old_game_state = gameState
     if text == "PAUSE":
         gameState = "paused"
         audio.music.pause()
@@ -117,7 +103,7 @@ def paused_loop(text):
                 terminate()
             elif event.type == KEYDOWN:
                 if event.key == K_SPACE:
-                    gameState = oldstate
+                    gameState = old_game_state
                     return event
         clock.tick(fps)
         pass
@@ -146,11 +132,11 @@ class Display(object):
                 each.step_move()
             else:
                 each.post()
-        for each in this_level.obstaclelist:
+        for each in this_level.obstacle_list:
             screen.blit(this_level.image, each.Rect), screen.blit(this_level.image, each.Rect2)
-        scorestr = str(round(score, 0))
-        scoretext = "Score: " + scorestr[:-2]
-        make_text_objs((605, 15), scoretext, 30, yellow, black)
+        score_string = str(round(score, 0))
+        score_text = "Score: " + score_string[:-2]
+        make_text_objs((605, 15), score_text, 30, yellow, black)
         if debug:
             fpsvar = "FPS: " + str(round(clock.get_fps(), 0))
             make_text_objs((10, 10), fpsvar[:-2], 18, black, pos="xy")
@@ -179,43 +165,60 @@ class DudeObj(object):
     def __init__(self):
         self.dudeimg = load("littledude1.png").convert_alpha()
         self.dudeRect = pygame.Rect(75, 300, 27, 30)
-        self.flamearray1 = [load("flame1.png").convert_alpha(),
+        self.flame_list1 = [load("flame1.png").convert_alpha(),
                             load("flame2.png").convert_alpha()]
-        self.flamearray2 = [load("flame3.png").convert_alpha(),
+        self.flame_list2 = [load("flame3.png").convert_alpha(),
                             load("flame4.png").convert_alpha()]
-        self.flame1 = self.flamearray1[(rand(0, len(self.flamearray1) - 1))]
-        self.flame2 = self.flamearray2[(rand(0, len(self.flamearray2) - 1))]
+        self.flame1 = self.flame_list1[(rand(0, len(self.flame_list1) - 1))]
+        self.flame2 = self.flame_list2[(rand(0, len(self.flame_list2) - 1))]
         self.flame = self.flame1
         self.flameRect = pygame.Rect(self.dudeRect.left, self.dudeRect.bottom, 30, 60)
         self.boosting = False
+        self.gravity = .30
+        self.power = .35
+        self.speed = 0
 
     def display(self):
         screen.blit(self.dudeimg, self.dudeRect)
         screen.blit(self.flame, self.flameRect)
 
-    def flame_boost(self, boost):
+    def flame_boost(self, boost=False):
         self.boosting = boost
         if self.boosting:
-            self.flame = self.flamearray1[(rand(0, len(self.flamearray1) - 1))]
-        else:
-            self.flame = self.flamearray2[(rand(0, len(self.flamearray2) - 1))]
+            audio.boots_volume(0.2)
 
-    def move(self, y, x=0):
-        self.dudeRect = self.dudeRect.move(x, y)
+            self.flame = self.flame_list1[(rand(0, len(self.flame_list1) - 1))]
+        else:
+            audio.boots_volume()
+
+            self.flame = self.flame_list2[(rand(0, len(self.flame_list2) - 1))]
+
+    def tick(self):
+        if self.boosting:
+            self.speed -= self.power
+            if self.speed < -6:
+                self.speed = -6
+        else:
+            self.speed += self.gravity
+        self.dudeRect = self.dudeRect.move(0, self.speed)
         self.flameRect = pygame.Rect(self.dudeRect.left, self.dudeRect.bottom, 30, 60)
 
 
-def collison(rect1, rectarray):
+def collision():
     global gameState
-    rectlist = []
-    for each in rectarray:
-        rectlist.append(each.Rect)
-        rectlist.append(each.Rect2)
-    if rect1.collidelist(rectlist) == -1:
-        return
-    else:
-        gameState = "dead"
-        return death()
+    if gameState == "playing":
+        if -100 > dude.dudeRect.bottom or dude.dudeRect.bottom > (resolution[1] + 100):
+            gameState = "dead"
+            death()
+        rect_list = []
+        for each in this_level.obstacle_list:
+            rect_list.append(each.Rect)
+            rect_list.append(each.Rect2)
+        if dude.dudeRect.collidelist(rect_list) == -1:
+            return
+        else:
+            gameState = "dead"
+            death()
 
 
 class LevelObj(object):
@@ -223,10 +226,10 @@ class LevelObj(object):
         self.difficulty = 0
         self.gap = 400
         self.gaptop = 0
-        self.thisgap = 0
+        self.this_gap = 0
         self.image = load("obstacle2.png").convert()
         self.tick = 500
-        self.obstaclelist = []
+        self.obstacle_list = []
 
     def game_tick(self):
         self.tick += 1
@@ -234,21 +237,21 @@ class LevelObj(object):
             self.tick = 0
             if self.difficulty < 200:
                 self.difficulty += 3
-            self.thisgap = self.gap - (self.difficulty + (rand(0, 5) * 4))
+            self.this_gap = self.gap - (self.difficulty + (rand(0, 5) * 4))
             # self.gaptop = rand(0, round((resolution[1] - self.thisgap) / 10, 0)) * 10
-            self.gaptop = rand(1, 9) * ((resolution[1] - self.thisgap) / 10)
-            self.obstaclelist.append(Obstacle(self.image, 0, 2))
-            self.obstaclelist[-1].new_set(self.thisgap, self.gaptop)
-        if len(self.obstaclelist) > 10:
-            del self.obstaclelist[0]
-        for each in self.obstaclelist:
+            self.gaptop = rand(1, 9) * ((resolution[1] - self.this_gap) / 10)
+            self.obstacle_list.append(Obstacle(self.image, 0, 2))
+            self.obstacle_list[-1].new_set(self.this_gap, self.gaptop)
+        if len(self.obstacle_list) > 10:
+            del self.obstacle_list[0]
+        for each in self.obstacle_list:
             each.step_move()
 
     def debug(self):
         tick = str(self.tick)
         difficulty = str(self.difficulty)
-        gap = str(self.thisgap)
-        obstacles = str(len(self.obstaclelist))
+        gap = str(self.this_gap)
+        obstacles = str(len(self.obstacle_list))
         statstext = ("Tick:%s    Difficulty:%s    Gap:%s    Obstacles:%s" % (tick, difficulty, gap, obstacles))
         make_text_objs((10, 570), statstext, 18, (100, 100, 100), pos="xy")
 
@@ -260,7 +263,7 @@ class MovingObj(object):
     speed is how many pixels a object will move per frame
     """
     def __init__(self, image, tick_skip=0, speed=1):
-        self.gaptop = None
+        self.gap_top = None
         self.Rect2 = None
         self.speed = speed
         self.tick_skip = tick_skip
@@ -293,9 +296,9 @@ class MovingObj(object):
 
 
 def create_hills():
-    hillsarray = [load("hills1.png").convert_alpha(),
+    hills_list = [load("hills1.png").convert_alpha(),
                   load("hills2.png").convert_alpha()]
-    hills = Hills(hillsarray, 3, 1)
+    hills = Hills(hills_list, 3, 1)
     hills.create()
     return hills
 
@@ -364,11 +367,11 @@ class Clouds(MovingObj):
 
 class Obstacle(MovingObj):
     def new_set(self, gap, gaptop):
-        self.gaptop = gaptop
+        self.gap_top = gaptop
         self.Rect2 = self.image.get_rect()
-        self.Rect.bottom = self.gaptop
+        self.Rect.bottom = self.gap_top
         self.Rect.left = resolution[0]
-        self.Rect2.top = self.gaptop + gap
+        self.Rect2.top = self.gap_top + gap
         self.Rect2.left = resolution[0]
 
     def step_move(self):
@@ -382,18 +385,18 @@ class Obstacle(MovingObj):
 def make_text_objs(location, text, font_size=30, rgb=black, shadow=None, pos="xy"):
     font = pygame.font.Font('freesansbold.ttf', font_size)
     x, y = location
-    textsurf = font.render(text, True, rgb)
-    textrect = pygame.Rect(textsurf.get_rect())
+    text_surf = font.render(text, True, rgb)
+    text_rect = pygame.Rect(text_surf.get_rect())
     if pos == "xy":
-        textrect = textrect.move(x, y)
+        text_rect = text_rect.move(x, y)
     elif pos == "center":
-        textrect.center = location
+        text_rect.center = location
     if shadow is not None:
-        textsurf2 = font.render(text, True, shadow)
-        textrect2 = textrect.copy()
-        textrect2 = textrect2.move(+ 2, + 2)
-        return screen.blit(textsurf2, textrect2), screen.blit(textsurf, textrect)
-    return screen.blit(textsurf, textrect)
+        text_surf2 = font.render(text, True, shadow)
+        text_rect2 = text_rect.copy()
+        text_rect2 = text_rect2.move(+ 2, + 2)
+        return screen.blit(text_surf2, text_rect2), screen.blit(text_surf, text_rect)
+    return screen.blit(text_surf, text_rect)
 
 
 class AudioHandler(object):
@@ -435,10 +438,10 @@ class ScoreBoard(object):
         except OSError:
             print("Can't Dump Scoreboard")
 
-    def add_score(self, scorev=-1):
+    def add_score(self, score_variable=-1):
         global gameState
         gameState = "scoreboard"
-        scorev = int(round(scorev, 0))
+        score_variable = int(round(score_variable, 0))
 
         if self.scoreboard is None:
             self.scoreboard = [["", 0], ["", 0], ["", 0], ["", 0], ["", 0]]
@@ -447,8 +450,8 @@ class ScoreBoard(object):
             for each in self.scoreboard:
                 if index > 5:
                     break
-                elif each[1] < scorev:
-                    name_score = ["", scorev]
+                elif each[1] < score_variable:
+                    name_score = ["", score_variable]
                     self.scoreboard.append(name_score)
                     self.scoreboard.sort(reverse=True, key=itemgetter(1))
                     if len(self.scoreboard) > 5:
