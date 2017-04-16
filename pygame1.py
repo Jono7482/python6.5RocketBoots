@@ -20,7 +20,10 @@ gameState = "Loading"
 this_level = None
 audio = None
 score = 0.0
+
 screen = pygame.display.set_mode(resolution)
+pygame.display.set_icon(load("icon.png").convert_alpha())
+pygame.display.set_caption("Rocket Boots")
 
 black = (0, 0, 0)
 yellow = (250, 250, 0)
@@ -71,18 +74,18 @@ def title():
         score = 0
         audio.play()
         x = 0
-        list = ["3", "2", "1", "START!"]
+        countdown = ["3", "2", "1", "START!"]
         while x < 4:
-            display.update()
+
             clock.tick(2.4)
-            make_text_objs((resolution[0] / 2, resolution[1] / 3), list[x], 75, yellow, black, "center")
-            pygame.display.flip()
+            display.update(countdown[x])
             audio.beep_play()
             clock.tick(2.4)
             x += 1
         audio.boots_play()
         gameState = "playing"
         game_loop()
+
 
 def game_loop():
     global score, gameState, audio
@@ -115,6 +118,7 @@ def game_loop():
         display.update()
         this_level.game_tick()
         clock.tick(fps)
+
 
 def computer_loop():
     global score, gameState, audio, dude, this_level
@@ -188,23 +192,10 @@ class Display(object):
         self.clouds[0].step_move()
         self.hills = create_hills()
 
-    def update(self):
-        global dude, score, gameState
-        screen.blit(self.background, (0, 0))
-        if gameState != "scoreboard" or gameState != "starting":
-            self.hills.step_move()
-        else:
-            self.hills.hills_post()
-        for each in self.clouds:
-            if gameState != "scoreboard" or gameState != "starting":
-                each.step_move()
-            else:
-                each.post()
-        for each in this_level.obstacle_list:
-            screen.blit(this_level.image, each.Rect), screen.blit(this_level.image, each.Rect2)
-        score_string = str(round(score, 0))
-        score_text = "Score: " + score_string[:-2]
-        make_text_objs((605, 15), score_text, 30, yellow, black)
+    def update(self, add_text=None):
+        global dude, gameState
+        self.update_background()
+        self.update_score()
         if debug:
             fpsvar = "FPS: " + str(round(clock.get_fps(), 0))
             make_text_objs((10, 10), fpsvar[:-2], 18, black, pos="xy")
@@ -223,16 +214,21 @@ class Display(object):
                            "Jono 2017 Ver: " + version, 20, (80, 80, 120), black, "center")
             make_text_objs((resolution[0] / 2, resolution[1] * .70),
                            "Space To Start", 50, bluegrey, black, "center")
-        if gameState != "scoreboard" or gameState != "starting":
+        if add_text is None:
+            pygame.display.flip()
+        else:
+            make_text_objs((resolution[0] / 2, resolution[1] / 3),
+                           add_text, 75, yellow, black, "center")
             pygame.display.flip()
 
     def pause(self):
         screen.blit(self.bgpause, self.bgpauserect)
 
-    def display_box(self, message, y):
-        global gameState
+    def display_scoreboard(self, message, y):
+        global gameState, dude
         gameState = "scoreboard"
-        self.update()
+        self.update_background()
+        dude.display()
         scoreboardObj.print_board()
         if len(message) == 0:
             message = "[NAME] "
@@ -255,11 +251,31 @@ class Display(object):
             pygame.display.flip()
         clock.tick(fps / 8)
 
+    def update_score(self):
+        global score
+        score_string = str(round(score, 0))
+        score_text = "Score: " + score_string[:-2]
+        return make_text_objs((605, 15), score_text, 30, yellow, black)
+
+    def update_background(self):
+        global gameState
+        screen.blit(self.background, (0, 0))
+        if gameState is "starting" or gameState is "scoreboard":
+            self.hills.hills_post()
+            for each in self.clouds:
+                each.post()
+        else:
+            self.hills.step_move()
+            for each in self.clouds:
+                each.step_move()
+        for each in this_level.obstacle_list:
+            screen.blit(this_level.image, each.Rect), screen.blit(this_level.image, each.Rect2)
+
 
 class DudeObj(object):
     def __init__(self):
         self.dudeimg = load("littledude1.png").convert_alpha()
-        self.dudeRect = pygame.Rect(150, 300, 27, 30)
+        self.dudeRect = pygame.Rect(150, resolution[1] / 3, 27, 30)
         self.flame_list1 = [load("flame1.png").convert_alpha(),
                             load("flame2.png").convert_alpha()]
         self.flame_list2 = [load("flame3.png").convert_alpha(),
@@ -439,6 +455,7 @@ class Hills(MovingObj):
     def hills_post(self):
         screen.blit(self.image_array[0], self.Rect)
         screen.blit(self.image_array[1], self.Rect2)
+
 
 def create_clouds():
     clouds_array = [load("cloud1.png").convert_alpha(),
@@ -635,9 +652,8 @@ def ask_name(y):
     # ask(question) -> answer
     global screen, gameState
     gameState = "scoreboard"
-    pygame.font.init()
     current_string = []
-    display.display_box("".join(current_string), y)
+    display.display_scoreboard("".join(current_string), y)
     while 1:
         in_key = get_key()
         if in_key == K_BACKSPACE:
@@ -647,7 +663,7 @@ def ask_name(y):
         elif in_key <= 127:
             current_string.append(chr(in_key))
             current_string = [c.upper() for c in current_string]
-        display.display_box("".join(current_string), y)
+        display.display_scoreboard("".join(current_string), y)
         clock.tick(fps)
     name = "".join(current_string)
     if name == "":
