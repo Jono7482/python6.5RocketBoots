@@ -10,9 +10,10 @@ from pygame.locals import *
 pygame.mixer.pre_init(44100, -16, 1, 512)  # Fix for delay in audio
 pygame.init()
 clock = pygame.time.Clock()
+version = "1.0"
 fps = 120
 resolution = 800, 600
-debug = True  # enables/disables fps display and debug info
+debug = False  # enables/disables fps display and debug info
 dude = None
 display = None
 gameState = "Loading"
@@ -23,14 +24,23 @@ screen = pygame.display.set_mode(resolution)
 
 black = (0, 0, 0)
 yellow = (250, 250, 0)
+red = (250, 0, 0)
+orange = (255, 100, 0)
+white = (255, 255, 255)
+darkgrey = (49, 54, 58)
+bluegrey = (80, 80, 120)
 
 
 def death():
-    global score
+    global score, gameState
     audio.boots1.pause()
     clock.tick(5)
+    display.update()
     scoreboardObj.add_score(score)
-    main()
+    display.update()
+    gameState = "Loading"
+    paused_loop("Press Space")
+    title()
 
 
 def terminate():
@@ -43,20 +53,40 @@ def terminate():
 def main():
     global dude, display, this_level, audio, score
     display = Display()
+    audio = AudioHandler()
     dude = DudeObj()
     this_level = LevelObj()
-    audio = AudioHandler()
     display.update()
-    pygame.event.post(paused_loop("Space To Start"))  # pause game and then return the event
-    score = 0.0
-    game_loop()
+    title()
 
+
+def title():
+    global dude, this_level, gameState, display, audio, score
+    dude.__init__()
+    this_level.__init__()
+    if gameState is "Loading":
+        computer_loop()
+    elif gameState is "playing":
+        gameState = "starting"
+        score = 0
+        audio.play()
+        x = 0
+        list = ["3", "2", "1", "START!"]
+        while x < 4:
+            display.update()
+            clock.tick(2.4)
+            make_text_objs((resolution[0] / 2, resolution[1] / 3), list[x], 75, yellow, black, "center")
+            pygame.display.flip()
+            audio.beep_play()
+            clock.tick(2.4)
+            x += 1
+        audio.boots_play()
+        gameState = "playing"
+        game_loop()
 
 def game_loop():
     global score, gameState, audio
-    gameState = "playing"
-    audio.play()
-    audio.boots_play()
+    score = 0.0
     while True:
         for event in pygame.event.get():
             if event.type == QUIT:
@@ -64,7 +94,9 @@ def game_loop():
             elif event.type == KEYDOWN:
                 if event.key == K_p:
                     dude.flame_boost()
+                    gameState = "paused"
                     pygame.event.post(paused_loop("PAUSE"))
+                    gameState = "playing"
                     audio.music.unpause()
                     audio.boots1.unpause()
                     clock.tick(20)
@@ -84,6 +116,45 @@ def game_loop():
         this_level.game_tick()
         clock.tick(fps)
 
+def computer_loop():
+    global score, gameState, audio, dude, this_level
+    gameState = "Loading"
+    dude = DudeObj()
+    this_level = LevelObj()
+    score = 0.0
+    while True:
+        for event in pygame.event.get():
+            if event.type == QUIT:
+                terminate()
+            elif event.type == KEYDOWN:
+                if event.key == K_p:
+                    pass
+                elif event.key == K_ESCAPE:
+                    terminate()
+                elif event.key == K_SPACE:
+                    gameState = "playing"
+                    pygame.event.post(event)
+                    title()
+            elif event.type == KEYUP:
+                if event.key == K_SPACE:
+                    pass
+
+        if dude.boosting:
+            if dude.dudeRect.bottom < rand(int(resolution[1] * .1), int(resolution[1] * .3)):
+                dude.flame_boost()
+            elif dude.dudeRect.bottom < resolution[1] * .05:
+                dude.flame_boost()
+        else:
+            if dude.dudeRect.bottom > rand(int(resolution[1] * .35), int(resolution[1] * .7)):
+                dude.flame_boost(boost=True, volume=0.1)
+        dude.tick()
+        collision()
+
+        score += .5
+        display.update()
+        this_level.game_tick()
+        clock.tick(fps)
+
 
 def paused_loop(text):
     global gameState
@@ -93,9 +164,8 @@ def paused_loop(text):
         audio.music.pause()
         display.pause()
     audio.boots1.pause()
-    make_text_objs((resolution[0] / 2, resolution[1] * .70), text, 50, yellow, black, "center")
-    if gameState != "Loading":
-        scoreboardObj.print_board()
+    make_text_objs((resolution[0] / 2, resolution[1] * .70), text, 50, bluegrey, black, "center")
+    scoreboardObj.print_board()
     pygame.display.flip()
     while True:
         for event in pygame.event.get():
@@ -110,8 +180,6 @@ def paused_loop(text):
 
 
 class Display(object):
-    global gameState
-
     def __init__(self):
         self.background = load("skynb.jpg").convert()
         self.bgpause = load("bgpaused.png").convert_alpha()
@@ -121,14 +189,14 @@ class Display(object):
         self.hills = create_hills()
 
     def update(self):
-        global dude, score
+        global dude, score, gameState
         screen.blit(self.background, (0, 0))
-        if gameState != "scoreboard":
+        if gameState != "scoreboard" or gameState != "starting":
             self.hills.step_move()
         else:
-            self.hills.post()
+            self.hills.hills_post()
         for each in self.clouds:
-            if gameState != "scoreboard":
+            if gameState != "scoreboard" or gameState != "starting":
                 each.step_move()
             else:
                 each.post()
@@ -142,13 +210,28 @@ class Display(object):
             make_text_objs((10, 10), fpsvar[:-2], 18, black, pos="xy")
             this_level.debug()
         dude.display()
-        if gameState != "scoreboard":
+        if gameState == "Loading":
+            make_text_objs((resolution[0] / 2, resolution[1] * .20),
+                           "RocketBoots", 100, yellow, black, "center")
+            make_text_objs((resolution[0] / 2, resolution[1] * .40),
+                           "Spacebar: Used to boost into the air", 25, bluegrey, black, "center")
+            make_text_objs((resolution[0] / 2, resolution[1] * .45),
+                           "P: Pauses the game", 25, bluegrey, black, "center")
+            make_text_objs((resolution[0] / 2, resolution[1] * .50),
+                           "ESC: to quit", 25, bluegrey, black, "center")
+            make_text_objs((resolution[0] * .85, resolution[1] * .95),
+                           "Jono 2017 Ver: " + version, 20, (80, 80, 120), black, "center")
+            make_text_objs((resolution[0] / 2, resolution[1] * .70),
+                           "Space To Start", 50, bluegrey, black, "center")
+        if gameState != "scoreboard" or gameState != "starting":
             pygame.display.flip()
 
     def pause(self):
         screen.blit(self.bgpause, self.bgpauserect)
 
     def display_box(self, message, y):
+        global gameState
+        gameState = "scoreboard"
         self.update()
         scoreboardObj.print_board()
         if len(message) == 0:
@@ -157,14 +240,26 @@ class Display(object):
         make_text_objs((resolution[0] / 2, resolution[1] * .68),
                        "New High Score!!!", 45, yellow, black, "center")
         make_text_objs((resolution[0] / 2, resolution[1] * .75),
-                       "Type your name then press [Enter]", 30, yellow, black, "center")
+                       "Type your name then press [Enter]", 30, bluegrey, black, "center")
         pygame.display.flip()
+
+    def explosion(self, position):
+        magnitude = 0
+        colors = [red, yellow, orange, white]
+        while magnitude < 50:
+            pygame.draw.circle(screen, colors[rand(0, len(colors) - 1)],
+                               (position[0] + rand(-magnitude, magnitude),  # X location
+                                position[1] + rand(-magnitude, magnitude)),  # Y location
+                               rand(1, 5))  # radius
+            magnitude += rand(0, 2)
+            pygame.display.flip()
+        clock.tick(fps / 8)
 
 
 class DudeObj(object):
     def __init__(self):
         self.dudeimg = load("littledude1.png").convert_alpha()
-        self.dudeRect = pygame.Rect(75, 300, 27, 30)
+        self.dudeRect = pygame.Rect(150, 300, 27, 30)
         self.flame_list1 = [load("flame1.png").convert_alpha(),
                             load("flame2.png").convert_alpha()]
         self.flame_list2 = [load("flame3.png").convert_alpha(),
@@ -182,10 +277,10 @@ class DudeObj(object):
         screen.blit(self.dudeimg, self.dudeRect)
         screen.blit(self.flame, self.flameRect)
 
-    def flame_boost(self, boost=False):
+    def flame_boost(self, boost=False, volume=0.2):
         self.boosting = boost
         if self.boosting:
-            audio.boots_volume(0.2)
+            audio.boots_volume(volume)
 
             self.flame = self.flame_list1[(rand(0, len(self.flame_list1) - 1))]
         else:
@@ -218,7 +313,25 @@ def collision():
             return
         else:
             gameState = "dead"
+            audio.explosion_play()
+            display.explosion(dude.dudeRect.center)
+            clock.tick(1)
             death()
+
+    if gameState == "Loading":
+        if -100 > dude.dudeRect.bottom or dude.dudeRect.bottom > (resolution[1] + 100):
+            computer_loop()
+        rect_list = []
+        for each in this_level.obstacle_list:
+            rect_list.append(each.Rect)
+            rect_list.append(each.Rect2)
+        if dude.dudeRect.collidelist(rect_list) == -1:
+            return
+        else:
+            audio.explosion_play(volume=.4)
+            display.explosion(dude.dudeRect.center)
+            clock.tick(1)
+            computer_loop()
 
 
 class LevelObj(object):
@@ -238,7 +351,6 @@ class LevelObj(object):
             if self.difficulty < 200:
                 self.difficulty += 3
             self.this_gap = self.gap - (self.difficulty + (rand(0, 5) * 4))
-            # self.gaptop = rand(0, round((resolution[1] - self.thisgap) / 10, 0)) * 10
             self.gaptop = rand(1, 9) * ((resolution[1] - self.this_gap) / 10)
             self.obstacle_list.append(Obstacle(self.image, 0, 2))
             self.obstacle_list[-1].new_set(self.this_gap, self.gaptop)
@@ -324,6 +436,9 @@ class Hills(MovingObj):
         screen.blit(self.image_array[0], self.Rect)
         screen.blit(self.image_array[1], self.Rect2)
 
+    def hills_post(self):
+        screen.blit(self.image_array[0], self.Rect)
+        screen.blit(self.image_array[1], self.Rect2)
 
 def create_clouds():
     clouds_array = [load("cloud1.png").convert_alpha(),
@@ -405,8 +520,15 @@ class AudioHandler(object):
         self.music = pygame.mixer.music
         self.music.load("Indiekid.mp3")
         self.boots1wav = pygame.mixer.Sound("boots1.wav")
+        self.explosion1wav = pygame.mixer.Sound("explosion1.wav")
         self.boots1wav.set_volume(0.05)
         self.boots1 = pygame.mixer.find_channel()
+        self.explosion1 = pygame.mixer.find_channel()
+        self.explosion1.set_volume(1)
+        self.beep1wav = pygame.mixer.Sound("beep1.wav")
+        self.beep2wav = pygame.mixer.Sound("beep2.wav")
+        self.beep = pygame.mixer.find_channel()
+        self.beep_tick = 0
         self.play()
 
     def play(self):
@@ -416,8 +538,20 @@ class AudioHandler(object):
         self.boots1.play(self.boots1wav, loops=-1, maxtime=0, fade_ms=0)
         self.boots1.unpause()
 
+    def explosion_play(self, volume=1):
+        self.explosion1.set_volume(volume)
+        self.explosion1.play(self.explosion1wav, loops=0, maxtime=0, fade_ms=0)
+
     def boots_volume(self, volume=0.05):
         self.boots1wav.set_volume(volume)
+
+    def beep_play(self):
+        if self.beep_tick < 3:
+            self.beep.play(self.beep1wav, loops=0, maxtime=0, fade_ms=0)
+            self.beep_tick += 1
+        else:
+            self.beep.play(self.beep2wav, loops=0, maxtime=0, fade_ms=0)
+            self.beep_tick = 0
 
 
 class ScoreBoard(object):
